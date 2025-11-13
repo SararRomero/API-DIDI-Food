@@ -11,6 +11,7 @@ router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
+
 # Crear tablas
 models.Base.metadata.create_all(bind=engine)
 
@@ -25,8 +26,9 @@ class UserCreate(BaseModel):
 
 
 class UserLogin(BaseModel):
-    email: str
-    password: str
+    email: str | None = None
+    password: str | None = None
+
 
 
 def get_db():
@@ -45,8 +47,11 @@ def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
 
+
 # ENDPOINT 1: Registrar usuario
-@router.post("/register")
+
+from fastapi import FastAPI, status
+@router.post("/register",status_code=status.HTTP_201_CREATED)
 def register(user: UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
@@ -67,14 +72,28 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
 
 #  ENDPOINT 2: Login
-@router.post("/login")
+from fastapi import FastAPI, status
+@router.post("/login", status_code=status.HTTP_200_OK)
 def login(user: UserLogin, db: Session = Depends(get_db)):
+
+    if not user.email or not user.password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debe enviar 'email' y 'password'."
+        )
+
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if not db_user:
-        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales incorrectas"
+        )
 
     if not verify_password(user.password, db_user.hashed_password):
-        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales incorrectas"
+        )
 
     token_data = {"sub": db_user.email, "role": db_user.role}
     access_token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)

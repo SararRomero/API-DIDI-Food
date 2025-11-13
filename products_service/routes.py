@@ -36,9 +36,9 @@ class ProductCreate(BaseModel):
     precio: float
 
 class ProductUpdate(BaseModel):
-    nombre: str | None = None
-    descripcion: str | None = None
-    precio: float | None = None
+    nombre: str
+    descripcion: str
+    precio: float
 
 # Endpoints
 @router.get("/products")
@@ -64,13 +64,22 @@ def create_product(
     db.refresh(new_product)
     return new_product
 
-@router.put("/products/{product_id}")
+
+from fastapi import FastAPI, status
+@router.put("/products/{product_id}", status_code=status.HTTP_200_OK)
 def update_product(
     product_id: int,
     product_data: ProductUpdate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(verify_token)
 ):
+
+    if not product_data.nombre or not product_data.descripcion:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Es necesario llenar todos los datos del producto"
+        )
+
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Solo los administradores pueden actualizar productos")
 

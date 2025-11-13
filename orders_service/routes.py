@@ -32,9 +32,16 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
 
 # Schemas
+from pydantic import BaseModel
+from typing import List
+
+class OrderItem(BaseModel):
+    product_id: int
+    quantity: int
+
+
 class OrderCreate(BaseModel):
-    producto_id: int
-    cantidad: int
+    items: List[OrderItem]
 
 # Endpoints
 @router.get("/orders")

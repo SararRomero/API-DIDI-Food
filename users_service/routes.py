@@ -49,14 +49,14 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 # Esquemas Pydantic
 # -------------------------------
 class UserUpdate(BaseModel):
-    email: str | None = None
-    role: str | None = None
+    email: str
+    role: str
 
 
 class UserCreate(BaseModel):
+    name: str
     email: str
     role: str = "cliente"
-
 
 # -------------------------------
 # Rutas del servicio
@@ -93,19 +93,36 @@ def get_user(
 
 
 #  Crear usuario (solo admin)
-@router.post("/users")
+from fastapi import FastAPI, status
+@router.post("/users", status_code=status.HTTP_201_CREATED)
 def create_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(verify_token)
 ):
+    # Verificar permisos
     if current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Se requieren privilegios de administrador")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requieren privilegios de administrador"
+        )
 
+    # Validar campos requeridos
+    if not user_data.email or not user_data.role:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Campos 'email' y 'role' son obligatorios"
+        )
+
+    # Validar existencia
     existing_user = db.query(models.User).filter(models.User.email == user_data.email).first()
     if existing_user:
-        raise HTTPException(status_code=400, detail="El usuario ya existe")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El usuario ya existe"
+        )
 
+    # Crear nuevo usuario
     user = models.User(email=user_data.email, role=user_data.role)
     db.add(user)
     db.commit()
@@ -113,29 +130,48 @@ def create_user(
 
     return {"id": user.id, "email": user.email, "role": user.role}
 
-
 # Actualizar usuario
-@router.put("/users/{user_id}")
+from fastapi import FastAPI, status
+@router.put("/users/{user_id}", status_code=status.HTTP_200_OK)
 def update_user(
     user_id: int,
     user_update: UserUpdate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(verify_token)
 ):
-    if current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Se requieren privilegios de administrador")
 
+    # Validar si no hay nada que actualizar
+    if not user_update.email or not user_update.role:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tanto 'email' como 'role' son campos obligatorios y no deben estar vacíos."
+        )
+
+    # Verificar permisos
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requieren privilegios de administrador"
+        )
+
+
+    # Buscar usuario
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado"
+        )
 
-    if user_update.email is not None:
-        user.email = user_update.email
-    if user_update.role is not None:
-        user.role = user_update.role
+
+
+    # Aplicar cambios
+    user.email = user_update.email
+    user.role = user_update.role
 
     db.commit()
     db.refresh(user)
+
     return {"id": user.id, "email": user.email, "role": user.role}
 
 
